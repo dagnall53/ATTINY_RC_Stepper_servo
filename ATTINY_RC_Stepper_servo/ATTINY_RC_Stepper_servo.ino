@@ -1,10 +1,14 @@
 /*
- * ATTINY85_RC_Receiver.c
+ * MODIFIED from  * ATTINY85_RC_Receiver.c
  *
  * Created: 01.01.2019 20:06:29
  * Author : Andreas
  * Description: Read and interpret signals from RC Receivers
  */ 
+
+ /*
+  * Dagnall 2020 modified to use alternate Timer
+  */
 
 // the clock speed on ATTINY85 is approx. 8MHz
 // if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
@@ -23,7 +27,7 @@
 // includes
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <util/atomic.h>
+//#include <util/atomic.h>
 
 
 // *****************************
@@ -32,7 +36,7 @@
 
 volatile uint8_t pulse_ready = 1;
 volatile uint8_t count;
-volatile uint8_t overflows = 0;
+//volatile uint8_t overflows = 0;
 int  Stepper_Position,oldpos;
 uint8_t  demand;
 //uint8_t local_overflows;
@@ -40,9 +44,9 @@ uint8_t  demand;
 int Timer1;
 bool PositionAchieved;
 
-#define StepSpeed  1000  //min is about 750
+#define StepSpeed  1000  //uS per step  min is about 750
 #define DEAD_ZONE 32
-#define FullRange 8 //3200/100
+#define GAIN 20 //20 sets  200 deg for 100 count
 #define RC_RECEIVER_PORT PB0
 
 #define OUT0 PB1
@@ -250,7 +254,7 @@ void Achieved(){
 
 void Move_To (int pos){
   int diff,aim;
-  aim=(pos*20); // gain here! before counting set for geared test motor 20 sets  200 deg for 100 count
+  aim=(pos*GAIN); // gain here! before counting set for geared test motor 20 sets  200 deg for 100 count
   
   diff = aim - Stepper_Position;  
   bool dir;
