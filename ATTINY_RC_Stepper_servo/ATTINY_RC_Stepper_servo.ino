@@ -7,7 +7,7 @@
  */ 
 
  /*
-  * Dagnall 2020 modified to use alternate Timer
+  * Dagnall 2021 modified to use alternate Timer
   */
 
 // the clock speed on ATTINY85 is approx. 8MHz
