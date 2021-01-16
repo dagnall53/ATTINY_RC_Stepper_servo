@@ -126,9 +126,7 @@ void Init_INTERRUPTS(){
 
 
 ISR(PCINT0_vect){
-
     // interrupt service routine for pin change interrupt
-
     // if PINB is HIGH, a rising edge interrupt has happened
     // if PINB is LOW, a falling edge interrupt has happened
 
@@ -136,18 +134,18 @@ ISR(PCINT0_vect){
    //  TCNT1 = 0;                           // reset counter (TCNT1 page 91 TCNT0 page 78
    //   TCCR1 = (1 << CS12) | (1 << CS11) | (1 << CS10);   // start timer1 with prescaler CK/64 --> 250 steps per 2ms (TCCR1 page 89
         TCNT0 = 0; 
-       TCCR0B = (1 <<CS01) | (1<< CS00) ; // start timero ck/64 page 80
+        TCCR0B = (1 <<CS01) | (1<< CS00) ; // start timero ck/64 page 80
         return;
        }
 
     // only reached when falling edge detected (end of servo pulse)
     //count = TCNT1;                           // take timer value to local variable
     //TCCR1 = 0;                               // stop timer
-    count = TCNT0;                           // take timer value to local variable 125-254 
-    TCCR0B = 0;                               // stop timer
+      count = TCNT0;                           // take timer value to local variable 125-254 
+      TCCR0B = 0;                               // stop timer
     
-    GIMSK &= ~(1 << PCIE);                   // Pin Change Interrupt Disable (datasheet page 51)
-    pulse_ready=1;
+      GIMSK &= ~(1 << PCIE);                   // Pin Change Interrupt Disable (datasheet page 51)
+      pulse_ready=1;
 }
 
 
@@ -162,58 +160,31 @@ void Stepper5_Drive(int  in) {
 
 switch (in % 7)  {  //(modulo keeps internal 0-7)) 
 case 0:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, HIGH);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
 break;
 case 1:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, HIGH);
-digitalWrite(OUT3, HIGH);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, HIGH);
 break;
 case 2:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, HIGH);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, LOW);
 break;
 case 3:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, HIGH);
-digitalWrite(OUT2, HIGH);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, LOW);
 break;
 case 4:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, HIGH);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
 break;
 case 5:
-digitalWrite(OUT0, HIGH);
-digitalWrite(OUT1, HIGH);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
 break;
 case 6:
-digitalWrite(OUT0, HIGH);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
 break;
 case 7:
-digitalWrite(OUT0, HIGH);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, HIGH);
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
 break;
 default:
-digitalWrite(OUT0, LOW);
-digitalWrite(OUT1, LOW);
-digitalWrite(OUT2, LOW);
-digitalWrite(OUT3, LOW);
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
 break;
 }
 
@@ -246,26 +217,24 @@ void Stepper4_Drive ( int  in){
         }
   }
 
-void Achieved(){
+void Achieved(){  
   PositionAchieved=true;digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
 }
 
 
 
-void Move_To (int pos){
+void Move_To (int pos){  
   int diff,aim;
   aim=(pos*GAIN); // gain here! before counting set for geared test motor 20 sets  200 deg for 100 count
-  
   diff = aim - Stepper_Position;  
   bool dir;
   if (abs(diff) >= (DEAD_ZONE)){
     oldpos=Stepper_Position;
     dir=(abs(diff)== diff);
-    
+                 // should probably be while loop, but I had trouble with that and this works.. 
   if (dir) {for (int x=oldpos; x<=aim;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position);}}
        else{  for (int x=oldpos; x>=aim;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }}
       Achieved();           
-
      }
   }
 
@@ -276,12 +245,9 @@ void Move_To (int pos){
 void IOTEST(){ 
   if ( pulse_ready) {
          pulse_ready = 0;
-  //       if (PositionAchieved)  {     
-             if ((count>=125)&&(count<=255)){
-                             demand= int(count-125); 
-                             PositionAchieved=false; }
-                             //}// clear so servo can move to new position
-                
+         if ((count>=125)&&(count<=255)){
+                   demand= int(count-125); //range is approx 125 to 255
+                   PositionAchieved=false; }
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
          GIMSK |= (1 << PCIE); }           // Pin Change Interrupt Enable (datasheet page 51)
         }
@@ -297,7 +263,7 @@ void setup(){
     //Serial.begin(115200); 
     //Move_To(0)to hit endstop..;
     for (int x=oldpos; x>=0;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position);}
-   PositionAchieved=true;
+    PositionAchieved=true;
   //calibration
  // delay(1000); Move_To(200);delay(500); Move_To(100);delay(500); Move_To(50);delay(500); Move_To(0);delay(1500); 
   //
@@ -305,23 +271,8 @@ void setup(){
 
     
 void loop(){
-
- //   delay(1000);
- //  Move_To(100);
-    // oldpos=Stepper_Position;
-   // for (int x=oldpos; x<=800;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position); }Achieved();
-   // Step_Move(800);
- //   delay(1000);
- //  Move_To(0);
-   // oldpos=Stepper_Position;
-    //for (int x=oldpos; x>=0;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }Achieved();
- //   Step_Move(0);
-    
+  
      IOTEST(); 
      if (!PositionAchieved) {  Move_To(demand);} 
-            
-
-     
       
-       
   }
