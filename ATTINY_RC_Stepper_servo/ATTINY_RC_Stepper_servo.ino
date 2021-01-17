@@ -45,8 +45,8 @@ int Timer1;
 bool PositionAchieved;
 
 #define StepSpeed  1000  //uS per step  min is about 750
-#define DEAD_ZONE 32
-#define GAIN 20 //20 sets  200 deg for 100 count
+#define DEAD_ZONE 22
+#define GAIN 15 //20 sets  200 deg for 100 count
 #define RC_RECEIVER_PORT PB0
 
 #define OUT0 PB1
@@ -153,7 +153,7 @@ ISR(PCINT0_vect){
 void Stepper_Drive(int  in) {
   //delay(StepSpeed);
   delayMicroseconds(StepSpeed);
-  Stepper5_Drive(in);  // simple way to select 4 pin or 5 pin steppers
+  Stepper4_Drive(in);  // simple way to select 4 pin or 5 pin steppers
   }
 
 void Stepper5_Drive(int  in) {
@@ -257,14 +257,13 @@ void setup(){
     Calibrate_OSCILLATOR();
     Init_PORT();
     Init_INTERRUPTS();
-    oldpos=3200;
+    Stepper_Position=3200;
     demand=0;
     PositionAchieved=false;
     //Serial.begin(115200); 
-    //Move_To(0)to hit endstop..;
-    for (int x=oldpos; x>=0;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position);}
-    PositionAchieved=true;
-  //calibration
+    Move_To(0);  //to hit endstop..;
+    ////oldpos=3200;for (int x=oldpos; x>=0;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position);}  PositionAchieved=true;
+  //calibration runs
  // delay(1000); Move_To(200);delay(500); Move_To(100);delay(500); Move_To(50);delay(500); Move_To(0);delay(1500); 
   //
   }
@@ -272,7 +271,9 @@ void setup(){
     
 void loop(){
   
-     IOTEST(); 
-     if (!PositionAchieved) {  Move_To(demand);} 
+      
+     if (!PositionAchieved) {  Move_To(demand);}
+      IOTEST();
+     
       
   }
