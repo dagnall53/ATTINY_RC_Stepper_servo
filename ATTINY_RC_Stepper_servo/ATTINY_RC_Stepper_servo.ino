@@ -8,6 +8,9 @@
 
  /*
   * Dagnall 2021 modified to use alternate Timer
+  * Board set to 8Mhz no usb
+  * 
+  * 
   */
 
 // the clock speed on ATTINY85 is approx. 8MHz
@@ -44,10 +47,13 @@ uint8_t  demand;
 int Timer1;
 bool PositionAchieved;
 
-#define StepSpeed  1000  //uS per step  min is about 750
-#define DEAD_ZONE 22
-#define GAIN 15 //20 sets  200 deg for 100 count
+#define HALF_STEP true
+
+#define StepSpeed  500  //uS per step // seems to have limited range (400-1200?) of operation with the tiny motors.. (resonance?)  
+
+#define GAIN 20 //20 sets  200 deg for 100 count
 #define RC_RECEIVER_PORT PB0
+#define DEAD_ZONE GAIN*1.5
 
 #define OUT0 PB1
 #define OUT1 PB2
@@ -85,7 +91,7 @@ void Calibrate_OSCILLATOR(void){
     // frequency was measured with oscilloscope via PB4 (CKOUT fuse needs to be set for this)
     
     // OSCCAL needs to be calibrated per chip
-    OSCCAL = 142;                            // this gave 7,96MHz (peaks of 8MHz) for value ranges see datasheet page 52
+    OSCCAL = 130;//142;  //Dag needs adjustng to ensure that servo pulses are seen ok. too high and one end will "fold back" in response                          // this gave 7,96MHz (peaks of 8MHz) for value ranges see datasheet page 52
 }
 
 void Init_PORT(void) {
@@ -129,7 +135,9 @@ ISR(PCINT0_vect){
     // interrupt service routine for pin change interrupt
     // if PINB is HIGH, a rising edge interrupt has happened
     // if PINB is LOW, a falling edge interrupt has happened
-
+    
+// no does not work.. if(PositionAchieved){  // dag test to see if this works only do when servo has achieved correct position
+  
     if ( RISING_EDGE ){       // check if rising edge pin change interrupt (beginning of servo pulse)
    //  TCNT1 = 0;                           // reset counter (TCNT1 page 91 TCNT0 page 78
    //   TCCR1 = (1 << CS12) | (1 << CS11) | (1 << CS10);   // start timer1 with prescaler CK/64 --> 250 steps per 2ms (TCCR1 page 89
@@ -146,15 +154,49 @@ ISR(PCINT0_vect){
     
       GIMSK &= ~(1 << PCIE);                   // Pin Change Interrupt Disable (datasheet page 51)
       pulse_ready=1;
+//no }     
 }
 
 
 
 void Stepper_Drive(int  in) {
-  //delay(StepSpeed);
+  //delay(2);
   delayMicroseconds(StepSpeed);
-  Stepper4_Drive(in);  // simple way to select 4 pin or 5 pin steppers
+//  Stepper4_LOW_Drive(in);
+  Stepper4_Drive(in);
+//  if (HALF_STEP) {Stepper4_half_step_Drive(in);} else {Stepper4_Drive(in); } // simple way to select 4 pin or 5 pin steppers
   }
+
+void Stepper4_Drive ( int  in){
+//   Serial.print(in);
+  /* stepper 4 phase changes
+   *  expects 0 - 3 input
+ *  A+ A- B+ B- 
+ *  1  0  0  0
+ *  0  0  1  0 
+ *  0  1  0  0
+ *  0  0  0  1
+ */
+   uint8_t internal;
+  internal=in % 3;    //(modulo keeps internal 0-3)
+   switch (internal){
+     case 0:{digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+         }
+    break;
+    case 1:{ digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, LOW);
+         }
+     break;
+  case 2:{   digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+         }
+     break;
+    case 3:{ digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+         }
+    break;
+        }
+  }
+
+
+
 
 void Stepper5_Drive(int  in) {
 
@@ -189,33 +231,96 @@ break;
 }
 
 }
-void Stepper4_Drive ( int  in){
-//   Serial.print(in);
-  /* stepper 4 phase changes
-   *  expects 0 - 3 input
- *  A+ B+ A- B-
- *  1  0  0  1
- *  1  1  0  0
- *  0  1  1  0
- *  0  0  1  1
- */
-   uint8_t internal;
-  internal=in % 3;    //(modulo keeps internal 0-3)
-   switch (internal){
-     case 0:{digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
-         }
-    break;
-    case 1:{ digitalWrite(OUT0, HIGH);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
-         }
-     break;
-  case 2:{   digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, LOW);
-         }
-     break;
-    case 3:{ digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, HIGH);
-         }
-    break;
-        }
-  }
+
+void Stepper4_half_step_Drive(int  in) {
+  /*Min power consumption
+   * 
+Terminal 1a: + 0 - 0 
+Terminal 1b: - 0 + 0 
+Terminal 2a: 0 + 0 - 
+Terminal 2b: 0 - 0 + 
+time —>
+
+max torque
+Terminal 1a: + + - - 
+Terminal 1b: - - + + 
+Terminal 2a: - + + - 
+Terminal 2b: + - - + 
+
+   * 
+   * 
+   * 
+   */
+
+switch (in % 7)  {  //(modulo keeps internal 0-7)) 
+case 0:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 1:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+case 2:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 3:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 4:
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 5:
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+case 6:
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 7:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+default:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+}
+
+}
+
+
+void Stepper4_LOW_Drive(int  in) {
+  /*
+   * max torque
+Terminal 1a: + + - - 
+Terminal 1b: - - + + 
+Terminal 2a: - + + - 
+Terminal 2b: + - - + 
+
+Min power consumption
+Terminal 1a: + 0 - 0 
+Terminal 1b: - 0 + 0 
+Terminal 2a: 0 + 0 - 
+Terminal 2b: 0 - 0 + 
+time —>
+   */
+
+switch (in % 3)  {  //(modulo keeps internal 0-7)) 
+case 0:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, HIGH);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+case 1:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, HIGH);
+break;
+case 2:
+digitalWrite(OUT0, HIGH);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+case 3:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, HIGH);digitalWrite(OUT3, LOW);
+break;
+
+default:
+digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
+break;
+}
+
+}
 
 void Achieved(){  
   PositionAchieved=true;digitalWrite(OUT0, LOW);digitalWrite(OUT1, LOW);digitalWrite(OUT2, LOW);digitalWrite(OUT3, LOW);
@@ -225,7 +330,7 @@ void Achieved(){
 
 void Move_To (int pos){  
   int diff,aim;
-  aim=(pos*GAIN); // gain here! before counting set for geared test motor 20 sets  200 deg for 100 count
+  aim=(pos*GAIN); // gain here! 
   diff = aim - Stepper_Position;  
   bool dir;
   if (abs(diff) >= (DEAD_ZONE)){
@@ -246,7 +351,7 @@ void IOTEST(){
   if ( pulse_ready) {
          pulse_ready = 0;
          if ((count>=125)&&(count<=255)){
-                   demand= int(count-125); //range is approx 125 to 255
+                   demand= int(count-125); //range is approx 125 to 255 gives 0-130
                    PositionAchieved=false; }
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
          GIMSK |= (1 << PCIE); }           // Pin Change Interrupt Enable (datasheet page 51)
