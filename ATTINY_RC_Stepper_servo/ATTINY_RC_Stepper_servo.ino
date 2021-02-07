@@ -26,7 +26,7 @@
 // if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
 // for this code CKDIV8 needs to be unset as the code relies on 8MHz CPU speed
 // the actual frequency can be measured at PB4 if the CKOUT fuse is set
-
+ // datasheet https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf
 
 //             ATTINY85 PIN Configuration (for more details see datasheet page 2)
 //                  -------
@@ -56,18 +56,29 @@ uint8_t  demand;
 int Timer1;
 bool PositionAchieved;
 
+//With an unknown board / motor these will need to be set initially to set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
+
+// #define Send_10K_CAL
+// #define Count_range_steps  // moves the drive repeatedly in 40 step increments so you can count the motor range.
+
+#define StepSpeed 600 //uS per step //  slower for non half step? 
 #define HALF_STEP true
+// GAIN is set to give full range for "0-125" response from the RC pulse as measured by the interrupt timer.
+// so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440
+// so gain sould be 1440/125 = (integer!) 12 
+#define GAIN 12 
+
+void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
+    // un comment #define Send_10K_CAL to send out 10kHz on PB3
+    // Then use Freq counter on PB3 to measure and adjust OSCCAL accordingly
+    // re comment Send_10K_CAL before final programing 
+    OSCCAL = 98;//;  //needs adjustng to ensure that servo pulses are seen ok. too high and one end will "fold back" in response      
+   //  for value ranges see datasheet page 31  note value ranges overlap at 127/128 ! so you may not get precisely the changes anticipated in this region.
+   }
 
 
-#define StepSpeed 300 //uS per step //  slower for non half step? 
-
-#define GAIN 15 //
+//PORTS 
 #define RC_RECEIVER_PORT PB0
-#define DEAD_ZONE GAIN*1.5
-
-
-
-
 // drive to motor drive ic
 #define OUTA PB1
 #define OUT_An PB3
@@ -76,25 +87,8 @@ bool PositionAchieved;
 
 #define RISING_EDGE PINB & (1 << RC_RECEIVER_PORT)
 
-void Calibrate_OSCILLATOR(void){
-
-    // function for calibrating the oscillator frequency
-    
-    // this program and corresponding timer setup requires that overflow to happens
-    // therefore it is required to stay below 8MHz nominal frequency
-    // specifically if the frequency is higher than 8MHz unwanted overflows would occur and destroy the software intend
-    
-    // Factory calibration for this very ATTINY85 was 148 (0x94 read from chip via ATMEL STUDIO "Device Programming")
-    // this gave a measured frequency of 8,196MHz
-    // frequency was measured with oscilloscope via PB4 (CKOUT fuse needs to be set for this)
-    
-    // OSCCAL needs to be calibrated per chip
-    OSCCAL = 135;//142;  //Dag needs adjustng to ensure that servo pulses are seen ok. too high and one end will "fold back" in response                          // this gave 7,96MHz (peaks of 8MHz) for value ranges see datasheet page 52
-}
-
 void Init_PORT(void) {
     // this function initializes the pins which are used as output / inputs
-
     DDRB |= (1 << OUTA);                 // set led port as output
     DDRB |= (1 << OUT_An);  
     DDRB |= (1 << OUTB);  
@@ -105,8 +99,9 @@ void Init_PORT(void) {
 
 
 void OUT_Control(float position,uint8_t port){
-    // this function switches the LED on depending on RC signal
+    // this function switches port on depending on RC signal
     // position variable indicates 0%-100% stick position
+    // ---------not used here but may be helpful 
     float loc;
     loc = position / 100 * 125;
      if ( count - 125 >= (int)loc ) {
@@ -115,7 +110,6 @@ void OUT_Control(float position,uint8_t port){
     }
     else {
          digitalWrite(port, HIGH);
-      
         //LED_OFF;
     }
 }
@@ -128,12 +122,17 @@ void Init_INTERRUPTS(){
      sei();                                   // enable interrupts (MANDATORY)
 }
 
-
+ #ifdef Send_10K_CAL   // for the calibration oscillator
+        ISR (TIMER0_COMPA_vect) {
+         PORTB ^= 1 << PINB3;        // Invert pin PB3
+        }
+ #endif 
 ISR(PCINT0_vect){
-    // interrupt service routine for pin change interrupt
+         // interrupt service routine for pin change interrupt to measure the RC servo pulse 
+         // modified to use TCNT0 to allow delay to work.. 
     // if PINB is HIGH, a rising edge interrupt has happened
     // if PINB is LOW, a falling edge interrupt has happened
-    // modified to use TCNT0 to allow delay to work.. 
+ 
     if ( RISING_EDGE ){       // check if rising edge pin change interrupt (beginning of servo pulse)
    //   TCNT1 = 0;                           // reset counter (TCNT1 page 91 TCNT0 page 78
    //   TCCR1 = (1 << CS12) | (1 << CS11) | (1 << CS10);   // start timer1 with prescaler CK/64 --> 250 steps per 2ms (TCCR1 page 89
@@ -148,19 +147,17 @@ ISR(PCINT0_vect){
       TCCR0B = 0;                               // stop timer
       GIMSK &= ~(1 << PCIE);                   // Pin Change Interrupt Disable (datasheet page 51)
       pulse_ready=1;
+
+
 }
 
 
 
 void Stepper_Drive(int  in) {    // simple way to select 4 pin or 5 pin steppers etc 
     delayMicroseconds(StepSpeed);
-//  Stepper4_LOW_Drive(in);
-//  Stepper4_Drive(in);
-   // Stepper4_half_step_Drive(in);
-  if (HALF_STEP) {Stepper4_half_step_Drive(in);} else {Stepper4_Drive(in); } 
- 
-    
-  }
+    //Stepper5_Drive(in);  //(for 5 wire stepper drive such as found in educational kits with geared servo drives.)
+    if (HALF_STEP) {Stepper4_half_step_Drive(in);} else {Stepper4_Drive(in); } 
+   }
 
 void Stepper4_Drive ( int  in){
 //   Serial.print(in);
@@ -189,7 +186,7 @@ void Stepper4_Drive ( int  in){
 
 
 
-void Stepper5_Drive(int  in) {
+void Stepper5_Drive(int  in) { // for 5 wire motors as in educational kits
 
 switch (in % 8)  {  //(modulo keeps internal 0-7)) 
 case 0:
@@ -224,8 +221,6 @@ break;
 }
 
 void Stepper4_half_step_Drive(int  in) {
-
-
 switch (in % 8)  {  //(modulo keeps internal 0-7)) 
 case 0:
 digitalWrite(OUTA, HIGH);digitalWrite(OUT_An, LOW);digitalWrite(OUTB, LOW);digitalWrite(OUT_Bn, LOW);
@@ -267,10 +262,26 @@ void Achieved(){
 
 void Move_To (int pos){  
   int diff,aim,deadzone; bool dir;
-  deadzone=DEAD_ZONE;  // so we can use halfstep bool
-  aim=(pos*GAIN); // use gain here! 
-  if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
+  deadzone=GAIN*2;  // allow a deadzone for no response if only a small change, to prevent "hunting" and allow drive to switch off
+  aim=(pos*GAIN); // move this many steps per "unit" of Rc pulse width .. (range 0-125) 
   
+  if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
+  diff = aim - Stepper_Position;  
+  if (abs(diff) >= (deadzone)){
+    oldpos=Stepper_Position;
+    dir=(abs(diff)== diff);
+                 // should probably be a while.. loop, but I had trouble with that and this works.. 
+    if (dir) {for (int x=oldpos; x<=aim;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position);}}
+         else{for (int x=oldpos; x>=aim;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }}
+    Achieved();           
+    }
+  }
+
+void Move_To_ABS (int pos){  
+  int diff,aim,deadzone; bool dir;
+  deadzone=2;  
+  aim=(pos); // No gains here! this code used only to move absolute to explore range of movement
+  if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
   diff = aim - Stepper_Position;  
   if (abs(diff) >= (deadzone)){
     oldpos=Stepper_Position;
@@ -282,11 +293,14 @@ void Move_To (int pos){
      }
   }
 
- 
-     
+void Count_Motor_Range(){ // Move motor absolute 40 steps to explore range. 
+  for (int x=0;x<=40;x++){
+    delay(1000); Move_To_ABS(x*40);}
+    Move_To_ABS(0);
+}
   
 
-void IOTEST(){ 
+void IOTEST(){ // measure the RC sevo signal
   if ( pulse_ready) {
          pulse_ready = 0;
          if ((count>=125)&&(count<=255)){
@@ -295,32 +309,50 @@ void IOTEST(){
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
          GIMSK |= (1 << PCIE); }           // Pin Change Interrupt Enable (datasheet page 51)
         }
-  
+
+void Int_driven_10k(){
+    Calibrate_OSCILLATOR();
+    pinMode(3,OUTPUT);          // Set PB3 to output
+    TCNT0 = 0;                  // Count up from 0
+    TCCR0A = 2 << WGM00;        // CTC mode
+    if (CLKPR == 3)             // If clock set to 1MHz
+        TCCR0B = (1<<CS00);     // Set prescaler to /1 (1uS at 1Mhz)
+    else                        // Otherwise clock set to 8MHz
+        TCCR0B = (2<<CS00);     // Set prescaler to /8 (1uS at 8Mhz)
+    GTCCR |= 1 << PSR0;         // Reset prescaler
+    OCR0A = 49;                 // 49 + 1 = 50 microseconds (10KHz)
+    TIFR = 1 << OCF0A;          // Clear output compare interrupt flag
+    TIMSK |= 1 << OCIE0A;       // Enable output compare interrupt
+}
 
 void setup(){
+  #ifdef Send_10K_CAL 
+     Int_driven_10k();
+  #else
     Calibrate_OSCILLATOR();
     Init_PORT();
-   // send out nominal 50kHz for calibration
-   //for (long x=0; x<=500000;x++){delayMicroseconds(1);digitalWrite(OUT_Bn, HIGH);delayMicroseconds(1);digitalWrite(OUT_Bn,LOW);}
-   //
     Init_INTERRUPTS();
-    Stepper_Position=3200;
+    Stepper_Position=3200; // A big number, must be larger than the actual number of max steps to ensure motor will reset to 0
     demand=0;
     PositionAchieved=false;
     //Serial.begin(115200); 
-    Move_To(0);  //to hit endstop..;
-    ////oldpos=3200;for (int x=oldpos; x>=0;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position);}  PositionAchieved=true;
-  //calibration runs
- // delay(1000); Move_To(200);delay(500); Move_To(100);delay(500); Move_To(50);delay(500); Move_To(0);delay(1500); 
-  //
+    Move_To_ABS(0);  //to hit endstop..;
+   //calibration runs ?
+    #ifdef Count_range_steps
+         Count_Motor_Range();
+    #endif
+    
+  #endif
   }
 
     
 void loop(){
-  
-      
+ 
+  #ifdef Send_10K_CAL 
+    // will do (just) the 10k interrupt driven test tone.
+  #else    
      if (!PositionAchieved) {  Move_To(demand);}
       IOTEST();
-     
+  #endif   
       
   }
