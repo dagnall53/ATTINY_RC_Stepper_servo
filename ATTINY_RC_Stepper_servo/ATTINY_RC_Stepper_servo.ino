@@ -7,26 +7,32 @@
  */ 
 
  /*
-  /*
- * MODIFIED from  * ATTINY85_RC_Receiver.c
- *
- * Created: 01.01.2019 20:06:29
- * Author : Andreas
- * Description: Read and interpret signals from RC Receivers
- */ 
-
- /*
-  * Dagnall 2021 modified to use alternate Timer
+  * Dagnall 2021 modified to use alternate Timer and drive stepper motor
   * Board set to 8Mhz no usb
+  * 
+  * Added code from http://becomingmaker.com/tuning-attiny-oscillator/ for interrupt based osc test frequency
+  * 
+  * I programmed using David A Mellis 's Board code,  
+  * Board:     ATtiny25/45/85
+  * Processor: Attiny85
+  * Clock    : Internal 8MHZ
+  * 
+  * Programmer: Arduino as ISP 
+  * via an arduino programmer (Programmed using "ArduinoISP" from EXAMPLES)
+  *  (NOTE- Burn Bootstrap the first time on the ATTINY85!)
+  * 
+  * I believe this makes the comments about CKDIV* in the orinal code irrelevant.. 
+  * "" if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
+  *    for this code CKDIV8 needs to be unset as the code relies on 8MHz CPU speed
+  *    the actual frequency can be measured at PB4 if the CKOUT fuse is set""
+  * 
   * 
   * 
   */
 
-// the clock speed on ATTINY85 is approx. 8MHz
-// if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
-// for this code CKDIV8 needs to be unset as the code relies on 8MHz CPU speed
-// the actual frequency can be measured at PB4 if the CKOUT fuse is set
- // datasheet https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf
+  // the clock speed on ATTINY85 is approx. 8MHz
+  // 
+  // datasheet https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf
 
 //             ATTINY85 PIN Configuration (for more details see datasheet page 2)
 //                  -------
@@ -39,8 +45,6 @@
 // includes
 #include <avr/io.h>
 #include <avr/interrupt.h>
-//#include <util/atomic.h>
-
 
 // *****************************
 // ***** global variables ******
@@ -48,20 +52,18 @@
 
 volatile uint8_t pulse_ready = 1;
 volatile uint8_t count;
-//volatile uint8_t overflows = 0;
+
 int  Stepper_Position,oldpos;
 uint8_t  demand;
-//uint8_t local_overflows;
-//uint8_t local_count;
 int Timer1;
 bool PositionAchieved;
 
-//With an unknown board / motor these will need to be set initially to set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
+//With an unknown board / motor the following cal routines need to be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
 
 // #define Send_10K_CAL
 // #define Count_range_steps  // moves the drive repeatedly in 40 step increments so you can count the motor range.
 
-#define StepSpeed 600 //uS per step //  slower for non half step? 
+#define StepSpeed 300 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
 #define HALF_STEP true
 // GAIN is set to give full range for "0-125" response from the RC pulse as measured by the interrupt timer.
 // so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440
@@ -71,8 +73,8 @@ bool PositionAchieved;
 void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
     // un comment #define Send_10K_CAL to send out 10kHz on PB3
     // Then use Freq counter on PB3 to measure and adjust OSCCAL accordingly
-    // re comment Send_10K_CAL before final programing 
-    OSCCAL = 98;//;  //needs adjustng to ensure that servo pulses are seen ok. too high and one end will "fold back" in response      
+    // re-comment  "Send_10K_CAL" before final programing 
+    OSCCAL = 97;//;  //needs adjustng to ensure that servo pulses are seen ok. too high and one end will "fold back" in response      
    //  for value ranges see datasheet page 31  note value ranges overlap at 127/128 ! so you may not get precisely the changes anticipated in this region.
    }
 
@@ -262,7 +264,7 @@ void Achieved(){
 
 void Move_To (int pos){  
   int diff,aim,deadzone; bool dir;
-  deadzone=GAIN*2;  // allow a deadzone for no response if only a small change, to prevent "hunting" and allow drive to switch off
+  deadzone=GAIN*2.5;  // allow a deadzone for no response if only a small change is seen in the demand, to prevent "hunting" and allow drive to switch off
   aim=(pos*GAIN); // move this many steps per "unit" of Rc pulse width .. (range 0-125) 
   
   if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
