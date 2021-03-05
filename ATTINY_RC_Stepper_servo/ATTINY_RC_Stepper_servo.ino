@@ -1,3 +1,4 @@
+
 /*
  * MODIFIED from  * ATTINY85_RC_Receiver.c
  *
@@ -20,6 +21,9 @@
   * Programmer: Arduino as ISP 
   * via an arduino programmer (Programmed using "ArduinoISP" from EXAMPLES)
   *  (NOTE- Burn Bootstrap the first time on the ATTINY85!)
+  * https://www.instructables.com/How-to-Program-an-Attiny85-From-an-Arduino-Uno/
+  * 
+  * set programmer to clock internal 8MHz
   * 
   * I believe this makes the comments about CKDIV* in the orinal code irrelevant.. 
   * "" if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
@@ -56,15 +60,18 @@ volatile uint8_t count;
 int  Stepper_Position,oldpos;
 uint8_t  demand;
 int Timer1;
-bool PositionAchieved;
+bool PositionAchieved,Analog_mode;
 
 //With an unknown board / motor the following cal routines need to be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
 
 // #define Send_10K_CAL
 // #define Count_range_steps  // moves the drive repeatedly in 40 step increments so you can count the motor range.
-
-#define StepSpeed 300 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
+#define FullRange 3000  // for full range movement option 
+//#define ANALOG  //de comment for analog else end to end 
+ 
+#define StepSpeed 600 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
 #define HALF_STEP true
+
 // GAIN is set to give full range for "0-125" response from the RC pulse as measured by the interrupt timer.
 // so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440
 // so gain sould be 1440/125 = (integer!) 12 
@@ -155,21 +162,22 @@ ISR(PCINT0_vect){
 
 
 
-void Stepper_Drive(int  in) {    // simple way to select 4 pin or 5 pin steppers etc 
-    delayMicroseconds(StepSpeed);
+void Stepper_Drive(int  in) {    // simple way to select 4 pin or 5 pin steppers etc. 
+    if (HALF_STEP) {delayMicroseconds(StepSpeed);}else {delayMicroseconds(StepSpeed*2);}
     //Stepper5_Drive(in);  //(for 5 wire stepper drive such as found in educational kits with geared servo drives.)
     if (HALF_STEP) {Stepper4_half_step_Drive(in);} else {Stepper4_Drive(in); } 
    }
-
 void Stepper4_Drive ( int  in){
 //   Serial.print(in);
   /* stepper 4 phase changes
    *  expects 0 - 3 input
  *  A+ A- B+ B- 
- *  1  0  0  0
- *  0  0  1  0 
- *  0  1  0  0
- *  0  0  0  1
+ *  1  0  0  0   <
+ *  0  0  1  0   up
+ *  0  1  0  0   >
+ *  0  0  0  1   down
+   0  0  1   <down
+ 
  */
    uint8_t internal;
   internal= in % 4;    //(modulo keeps internal 0-3)
@@ -181,6 +189,40 @@ void Stepper4_Drive ( int  in){
     case 2:   digitalWrite(OUTA, LOW);digitalWrite(OUT_An, HIGH);digitalWrite(OUTB, LOW);digitalWrite(OUT_Bn, LOW);
             break;
     case 3:   digitalWrite(OUTA, LOW);digitalWrite(OUT_An, LOW);digitalWrite(OUTB, LOW);digitalWrite(OUT_Bn, HIGH);
+            break;
+        }
+  }
+
+
+
+void Stepper4_HPDrive ( int  in){
+//   Serial.print(in);
+  /* stepper 4 phase changes
+   *  expects 0 - 3 input
+ *  A+ A- B+ B- 
+ *  1  0  0  0   <
+ *  0  0  1  0   up
+ *  0  1  0  0   >
+ *  0  0  0  1   down
+ * becomes
+   *  expects 0 - 3 input
+ *  L(A+ A-) B+ B- 
+ *  1  0  1  0   <up
+ *  0  1  1  0   >upp
+ *  0  1  0  1   >down 
+ *  1  0  0  1   <down
+ 
+ */
+   uint8_t internal;
+  internal= in % 4;    //(modulo keeps internal 0-3)
+   switch (internal){
+     case 0: digitalWrite(OUTA, HIGH);digitalWrite(OUT_An, LOW);digitalWrite(OUTB, HIGH);digitalWrite(OUT_Bn, LOW);
+            break;
+    case 1:   digitalWrite(OUTA, LOW);digitalWrite(OUT_An, HIGH);digitalWrite(OUTB, HIGH);digitalWrite(OUT_Bn, LOW);
+            break;
+    case 2:   digitalWrite(OUTA, LOW);digitalWrite(OUT_An, HIGH);digitalWrite(OUTB, LOW);digitalWrite(OUT_Bn, HIGH);
+            break;
+    case 3:   digitalWrite(OUTA, HIGH);digitalWrite(OUT_An, LOW);digitalWrite(OUTB, LOW);digitalWrite(OUT_Bn, HIGH);
             break;
         }
   }
@@ -303,11 +345,24 @@ void Count_Motor_Range(){ // Move motor absolute 40 steps to explore range.
   
 
 void IOTEST(){ // measure the RC sevo signal
+  uint8_t Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
+
+    if (Analog_mode){     
          if ((count>=125)&&(count<=255)){
                    demand= int(count-125); //range is approx 125 to 255 gives 0-130
                    PositionAchieved=false; }
+                    }
+                    else {PositionAchieved=false;  // add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;
+                                                   // for hystresis of 20
+                                                   // add/sub  20*Stepper_Position/Fullrange 
+                                                   Hystresis = 20*Stepper_Position/FullRange; 
+                          if (count>=(180-Hystresis)){demand=FullRange;}
+                                else {demand=0;} 
+                          } 
+
+                   
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
          GIMSK |= (1 << PCIE); }           // Pin Change Interrupt Enable (datasheet page 51)
         }
@@ -331,6 +386,11 @@ void setup(){
   #ifdef Send_10K_CAL 
      Int_driven_10k();
   #else
+   Analog_mode= false;
+    #ifdef ANALOG
+      Analog_mode= true;
+    #endif
+      
     Calibrate_OSCILLATOR();
     Init_PORT();
     Init_INTERRUPTS();
