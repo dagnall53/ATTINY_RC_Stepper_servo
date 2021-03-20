@@ -9,7 +9,7 @@
 
  /*
   * Dagnall 2021 modified to use alternate Timer and drive stepper motor
-  * Board set to 8Mhz no usb
+  * Board set to internal 8Mhz no usb
   * 
   * Added code from http://becomingmaker.com/tuning-attiny-oscillator/ for interrupt based osc test frequency
   * 
@@ -58,7 +58,7 @@ volatile uint8_t pulse_ready = 1;
 volatile uint8_t count;
 
 int  Stepper_Position,oldpos;
-uint8_t  demand;
+uint16_t  demand;
 int Timer1;
 bool PositionAchieved,Analog_mode;
 
@@ -66,8 +66,10 @@ bool PositionAchieved,Analog_mode;
 
 // #define Send_10K_CAL
 // #define Count_range_steps  // moves the drive repeatedly in 40 step increments so you can count the motor range.
-#define FullRange 3000  // for full range movement option 
+
 //#define ANALOG  //de comment for analog else end to end 
+
+#define FullRange 3000  // ~3000 for full range movement option for non analog  larger keeps motor driving until it hits endstops
  
 #define StepSpeed 600 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
 #define HALF_STEP true
@@ -95,9 +97,10 @@ void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
 //PORTS 
 #define RC_RECEIVER_PORT PB0
 // drive to motor drive ic
+//pinout for jlpcb board 
 #define OUTA PB1
-#define OUT_An PB3
-#define OUTB PB2
+#define OUT_An PB2
+#define OUTB PB3
 #define OUT_Bn PB4
 
 #define RISING_EDGE PINB & (1 << RC_RECEIVER_PORT)
@@ -351,22 +354,23 @@ void Count_Motor_Range(){ // Move motor absolute 40 steps to explore range.
   
 
 void IOTEST(){ // measure the RC sevo signal
-  uint8_t Hystresis;
+  uint16_t Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
-
+ if ((count>=110)&&(count<=255)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 
     if (Analog_mode){     
-         if ((count>=110)&&(count<=255)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 
+        
                    demand= int(count-110); //use 127*OSCNOM/100 ? Nominal range is approx 125 to 255 gives 0-130
                    PositionAchieved=false; }
-                    }
-                    else {PositionAchieved=false;  // add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;
+ 
+             else {PositionAchieved=false;  // switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;
                                                    // for hystresis of 20
                                                    // add/sub  20*Stepper_Position/Fullrange 
                                                    Hystresis = 20*Stepper_Position/FullRange; 
                           if (count>=(180-Hystresis)){demand=FullRange;}
                                 else {demand=0;} 
-                          } 
+                          }
+ } 
 
                    
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
@@ -400,7 +404,7 @@ void setup(){
     Calibrate_OSCILLATOR();
     Init_PORT();
     Init_INTERRUPTS();
-    Stepper_Position=3200; // A big number, must be larger than the actual number of max steps to ensure motor will reset to 0
+    Stepper_Position=2*FullRange; // A big number, must be larger than the actual number of max steps to ensure motor will reset to 0
     demand=0;
     PositionAchieved=false;
     //Serial.begin(115200); 
