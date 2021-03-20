@@ -58,7 +58,7 @@ volatile uint8_t pulse_ready = 1;
 volatile uint8_t count;
 
 int  Stepper_Position,oldpos;
-uint16_t  demand;
+uint8_t  demand;
 int Timer1;
 bool PositionAchieved,Analog_mode;
 
@@ -69,7 +69,7 @@ bool PositionAchieved,Analog_mode;
 
 //#define ANALOG  //de comment for analog else end to end 
 
-#define FullRange 3000  // ~3000 for full range movement option for non analog  larger keeps motor driving until it hits endstops
+#define FullRange 1500  // ~3000 for full range movement option for non analog  larger keeps motor driving until it hits endstops
  
 #define StepSpeed 600 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
 #define HALF_STEP true
@@ -333,7 +333,7 @@ void Move_To (int pos){
 void Move_To_ABS (int pos){  
   int diff,aim,deadzone; bool dir;
   deadzone=2;  
-  aim=(pos); // No gains here! this code used only to move absolute to explore range of movement
+  aim=(pos); // No gains here! this code used to move absolute position mainly for range testing
   if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
   diff = aim - Stepper_Position;  
   if (abs(diff) >= (deadzone)){
@@ -354,7 +354,7 @@ void Count_Motor_Range(){ // Move motor absolute 40 steps to explore range.
   
 
 void IOTEST(){ // measure the RC sevo signal
-  uint16_t Hystresis;
+  int Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
  if ((count>=110)&&(count<=255)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 
@@ -363,14 +363,13 @@ void IOTEST(){ // measure the RC sevo signal
                    demand= int(count-110); //use 127*OSCNOM/100 ? Nominal range is approx 125 to 255 gives 0-130
                    PositionAchieved=false; }
  
-             else {PositionAchieved=false;  // switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;
-                                                   // for hystresis of 20
-                                                   // add/sub  20*Stepper_Position/Fullrange 
-                                                   Hystresis = 20*Stepper_Position/FullRange; 
-                          if (count>=(180-Hystresis)){demand=FullRange;}
-                                else {demand=0;} 
+             else {  // switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;?
+                   Hystresis = 0; demand=0;
+                  // if (Stepper_Position>=10){Hystresis = 40;}
+                   if (count>=(180)){demand=254;}
+                   PositionAchieved=false;
                           }
- } 
+                     } 
 
                    
          GIFR = (1 << PCIF);              // clear Pin Change Interrupt Flag  (datasheet page 52)
@@ -420,11 +419,13 @@ void setup(){
     
 void loop(){
  
-  #ifdef Send_10K_CAL 
+//  #ifdef Send_10K_CAL 
     // will do (just) the 10k interrupt driven test tone.
-  #else    
-     if (!PositionAchieved) {  Move_To(demand);}
-      IOTEST();
-  #endif   
+//   #endif   
+   if (Analog_mode) {
+         if (!PositionAchieved) {  Move_To(demand);}}
+      else if (!PositionAchieved) {  Move_To_ABS(demand);}
+         IOTEST();
+  
       
   }
