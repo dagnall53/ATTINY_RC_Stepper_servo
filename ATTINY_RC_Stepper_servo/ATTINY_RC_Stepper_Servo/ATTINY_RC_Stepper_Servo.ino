@@ -8,24 +8,33 @@
  */ 
 
  /*
-  * Dagnall 2021 modified to use alternate Timer and drive stepper motor
-  * Board set to internal 8Mhz no usb
-  * 
+  * Dagnall 2021 modified to use alternate Timer and drive stepper motor (I think this allows me to use  delay())..
   * Added code from http://becomingmaker.com/tuning-attiny-oscillator/ for interrupt based osc test frequency
   * 
-  * I programmed using David A Mellis 's Board code,  
+  * 
+  * 
+  * 
+  * Program with Arduino: 
+  * Attiny D Mellis board https://github.com/damellis/attiny
+  *
   * Board:     ATtiny25/45/85
   * Processor: Attiny85
   * Clock    : Internal 8MHZ
   * 
+  * for me : either: 
   * Programmer: Arduino as ISP 
-  * via an arduino programmer (Programmed using "ArduinoISP" from EXAMPLES)
-  *  (NOTE- Burn Bootstrap the first time on the ATTINY85!)
-  * https://www.instructables.com/How-to-Program-an-Attiny85-From-an-Arduino-Uno/
+  *     via an arduino programmer (Programmed using "ArduinoISP" from EXAMPLES)
+  *    (NOTE- Burn Bootstrap the first time on the ATTINY85!)
+  *     https://www.instructables.com/How-to-Program-an-Attiny85-From-an-Arduino-Uno/
+  * 
+  * Or: if using USBTinyISP, then add driver!.  (https://learn.adafruit.com/usbtinyisp/drivers)
+  * 
+  * 
+  * 
   * 
   * set programmer to clock internal 8MHz
   * 
-  * I believe this makes the comments about CKDIV* in the orinal code irrelevant.. 
+  * I believe this makes the comments about CKDIV* in the original code irrelevant.. 
   * "" if fuse CKDIV8 is set (factory default), a prescaler of 8 is used which results in a 1MHz clock
   *    for this code CKDIV8 needs to be unset as the code relies on 8MHz CPU speed
   *    the actual frequency can be measured at PB4 if the CKOUT fuse is set""
@@ -45,6 +54,14 @@
 //          PB4 ---|       |--- PB1 / MISO
 //          GND ---|       |--- PB0 / MOSI
 //                  -------
+//
+//
+// For motor drive pin outs see below.. I have used both FM116B (sot23 drivers) and also TB6612FNG.
+ //
+//
+//
+
+
 
 // includes
 #include <avr/io.h>
@@ -58,23 +75,28 @@ volatile uint8_t pulse_ready = 1;
 volatile uint8_t count;
 
 int  Stepper_Position,oldpos;
-uint8_t  demand;
+int  demand;
 int Timer1;
 bool PositionAchieved,Analog_mode;
 
-//With an unknown board / motor the following cal routines need to be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
+//With an unknown board / motor the following cal routines can be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
 
 // #define Send_10K_CAL
 // #define Count_range_steps  // moves the drive repeatedly in 40 step increments so you can count the motor range.
 
+//---------are we going to simulate an Analog servo, or a "End to end" device that switches at about PWM ==90 degrees? 
+
 //#define ANALOG  //de comment for analog else end to end 
 
-#define FullRange 1500  // ~3000 for full range movement option for non analog  larger keeps motor driving until it hits endstops
- 
-#define StepSpeed 600 //600uS per step is ok 300 is about max speed at half step //  perhaps slower needed for full step? 
-#define HALF_STEP true
 
-// GAIN is set to give full range for "0-125" response from the RC pulse as measured by the interrupt timer.
+#define FullRange 1500  // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
+#define StepSpeed 250 //uS per step 300 is about max speed at half step //  perhaps slower needed for full step? 
+#define HALF_STEP true  //false at 350us gives about 8 oz thrust, BUT this is close to the dynamic max holding thrust;
+                         // STATIC holding thrust is about 12-16 oz, but once initial movement is started it drops to about 8/9 oz needed 
+                         //to keep the slider moving. 
+                        // half step drives at HALF speed!
+
+// GAIN is set to give full range for "0-125" (nominal 0-1.25ms)range (== 1.0 to 2.25ms nominal response from the RC pulse as measured by the interrupt timer.
 // so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440
 // so gain sould be 1440/125 = (integer!) 12 
 #define GAIN 12 
@@ -172,9 +194,9 @@ ISR(PCINT0_vect){
 
 
 void Stepper_Drive(int  in) {    // simple way to select 4 pin or 5 pin steppers etc. 
-    if (HALF_STEP) {delayMicroseconds(StepSpeed);}else {delayMicroseconds(StepSpeed*2);}
-    //Stepper5_Drive(in);  //(for 5 wire stepper drive such as found in educational kits with geared servo drives.)
-    if (HALF_STEP) {Stepper4_half_step_Drive(in);} else {Stepper4_Drive(in); } 
+    if (HALF_STEP) {delayMicroseconds(StepSpeed);Stepper4_half_step_Drive(in);}
+              else {delayMicroseconds(StepSpeed);Stepper4_Drive(in);}
+    
    }
 void Stepper4_Drive ( int  in){
 //   Serial.print(in);
@@ -315,14 +337,14 @@ void Achieved(){
 
 void Move_To (int pos){  
   int diff,aim,deadzone; bool dir;
-  deadzone=GAIN*2.5;  // allow a deadzone for no response if only a small change is seen in the demand, to prevent "hunting" and allow drive to switch off
-  aim=(pos*GAIN); // move this many steps per "unit" of Rc pulse width .. (range 0-125) 
-  
-  if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
-  diff = aim - Stepper_Position;  
+  aim=(pos*GAIN); // move this many steps per "unit" (nominal 0.1ms) of Rc pulse width .. (range 0-125) 
+  deadzone=GAIN*4;  // allow a deadzone for no response if only a small change is seen in the demand, to prevent "hunting" and allow drive to switch off
+  // how far from last position?  (half step is dealt with elsewhere) 
+  diff = aim - Stepper_Position; 
   if (abs(diff) >= (deadzone)){
     oldpos=Stepper_Position;
     dir=(abs(diff)== diff);
+    if (HALF_STEP){aim=aim*2;}
                  // should probably be a while.. loop, but I had trouble with that and this works.. 
     if (dir) {for (int x=oldpos; x<=aim;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position);}}
          else{for (int x=oldpos; x>=aim;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }}
@@ -332,18 +354,17 @@ void Move_To (int pos){
 
 void Move_To_ABS (int pos){  
   int diff,aim,deadzone; bool dir;
-  deadzone=2;  
-  aim=(pos); // No gains here! this code used to move absolute position mainly for range testing
-  if (HALF_STEP){aim=aim*2;deadzone=deadzone*2;}
-  diff = aim - Stepper_Position;  
-  if (abs(diff) >= (deadzone)){
+  // No gains here! this code used only move absolute position mainly for range testing 
+  diff = pos - Stepper_Position;  
+//  if (abs(diff) >= (deadzone)){
     oldpos=Stepper_Position;
     dir=(abs(diff)== diff);
+    if (HALF_STEP){aim=aim*2;}
                  // should probably be a while.. loop, but I had trouble with that and this works.. 
   if (dir) {for (int x=oldpos; x<=aim;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position);}}
        else{for (int x=oldpos; x>=aim;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }}
       Achieved();           
-     }
+  //   }
   }
 
 void Count_Motor_Range(){ // Move motor absolute 40 steps to explore range. 
@@ -357,16 +378,16 @@ void IOTEST(){ // measure the RC sevo signal
   int Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
- if ((count>=110)&&(count<=255)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 
+ if ((count>=100)&&(count<=255)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 
     if (Analog_mode){     
         
-                   demand= int(count-110); //use 127*OSCNOM/100 ? Nominal range is approx 125 to 255 gives 0-130
+                   demand= int(count-100); //use 127*OSCNOM/100 ? Nominal servo range is approx 1ms to 2ms  (My digital tester gives 0.8ms to 2.2ms)
                    PositionAchieved=false; }
  
-             else {  // switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;?
+             else {  // end to end switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;?
                    Hystresis = 0; demand=0;
-                  // if (Stepper_Position>=10){Hystresis = 40;}
-                   if (count>=(180)){demand=254;}
+                   if (Stepper_Position>=50){Hystresis = 20;}
+                   if (count>=(170-Hystresis)){demand=(2*FullRange)/GAIN;}  // drive to twice range 
                    PositionAchieved=false;
                           }
                      } 
@@ -391,6 +412,19 @@ void Int_driven_10k(){
     TIMSK |= 1 << OCIE0A;       // Enable output compare interrupt
 }
 
+void Step_set_Zero(int Flashes){
+  
+for (int x=1; x<=Flashes; x++){
+      delay(50);
+      Stepper_Position=(2*FullRange)/Flashes;
+      demand=0;
+      PositionAchieved=false;
+      Move_To_ABS(0);  //to hit endstop, aiming at 2x Fullrange ..;
+    
+}}
+
+
+
 void setup(){
   #ifdef Send_10K_CAL 
      Int_driven_10k();
@@ -403,11 +437,11 @@ void setup(){
     Calibrate_OSCILLATOR();
     Init_PORT();
     Init_INTERRUPTS();
-    Stepper_Position=2*FullRange; // A big number, must be larger than the actual number of max steps to ensure motor will reset to 0
-    demand=0;
-    PositionAchieved=false;
-    //Serial.begin(115200); 
-    Move_To_ABS(0);  //to hit endstop..;
+     if (Analog_mode){
+        Step_set_Zero(4); // 4 flashes tells you its analog mode
+        } 
+        else{Step_set_Zero(1);
+        }
    //calibration runs ?
     #ifdef Count_range_steps
          Count_Motor_Range();
@@ -418,14 +452,8 @@ void setup(){
 
     
 void loop(){
- 
-//  #ifdef Send_10K_CAL 
-    // will do (just) the 10k interrupt driven test tone.
-//   #endif   
-   if (Analog_mode) {
-         if (!PositionAchieved) {  Move_To(demand);}}
-      else if (!PositionAchieved) {  Move_To_ABS(demand);}
-         IOTEST();
-  
+
+  if (!PositionAchieved) {  Move_To(demand);    }
+          IOTEST();
       
   }
