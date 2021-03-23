@@ -338,15 +338,16 @@ void Achieved(){
 void Move_To (int pos){  
   int diff,aim,deadzone; bool dir;
   aim=(pos*GAIN);     // move this many steps per "unit" (circa 0.1ms/count) of Rc pulse width .. (range ~ 0-130, see iotest) 
-  deadzone=GAIN*1.5;  // allow a deadzone for no response if only a small change is seen in the demand, to prevent "hunting" and allow drive to switch off
+  deadzone=GAIN*2;  // allow a deadzone for no response if only a small change is seen in the demand, to prevent "hunting" and allow drive to switch off
   
   // how far from last position?  
+  
+  if (HALF_STEP){aim=aim*2; deadzone= deadzone*2;} 
   diff = aim - Stepper_Position; 
   if (abs(diff) >= (deadzone)){
     oldpos=Stepper_Position;
     dir=(abs(diff)== diff);
-    if (HALF_STEP){aim=aim*2;}
-                 // should probably be a while.. loop, but I had trouble with that and this works.. 
+                  // should probably be a while.. loop, but I had trouble with that and this works.. 
     if (dir) {for (int x=oldpos; x<=aim;x++){Stepper_Position=x;Stepper_Drive(Stepper_Position);}}
          else{for (int x=oldpos; x>=aim;x--){Stepper_Position=x;Stepper_Drive(Stepper_Position); }}
     Achieved();  // leaves current position in Stepper_Position         
@@ -431,7 +432,7 @@ void setup(){
     #ifdef ANALOG
       Analog_mode= true;
     #endif
-      
+  if ((analogRead(0)) <= 900 ) {  Analog_mode= true;}  // 10 bit test using RST /..  if nothing connected, reset pin is near Vcc else is lower..    
    Calibrate_OSCILLATOR();
    Init_PORT();
    Init_INTERRUPTS();
