@@ -34,3 +34,4 @@ HOWEVER: when used as an "end to end" drive, switching at a "threshold" Pwm inpu
 
 I have designed a small PCB to make this easy to use. This can be obtained from PCB way or other suppliers such as JLPCB. 
  
+Adjusted folder organization

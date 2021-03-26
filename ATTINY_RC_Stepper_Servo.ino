@@ -1,17 +1,17 @@
 
-/*
- * MODIFIED from  * ATTINY85_RC_Receiver.c
- * https://github.com/chiefenne/ATTINY85-RC-Receiver-Decoder
- * Created: 01.01.2019 20:06:29
- * Author : Andreas
- * Description: Read and interpret signals from RC Receivers
- */ 
+
 
  /*
   * Dagnall 2021 modified to use alternate Timer and drive stepper motor (I think this allows me to use  delay())..
   * Added code from http://becomingmaker.com/tuning-attiny-oscillator/ for interrupt based osc test frequency
   * 
-  * 
+  * /*
+ * MODIFIED from  * ATTINY85_RC_Receiver.c
+ * https://github.com/chiefenne/ATTINY85-RC-Receiver-Decoder
+ * Created: 01.01.2019 20:06:29
+ * Author : Andreas
+ * Description: Read and interpret signals from RC Receivers
+ 
   * 
   * 
   * Program with Arduino: 
