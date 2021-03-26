@@ -1,6 +1,7 @@
 # ATTINY_RC_Stepper_servo
  ATTINY85 stepper motor drive with PWM (RC) control
  Designed to make it easy to use "RC-servo" control with Inexpensive but powerful miniature geared stepper motors. 
+ Video here https://youtu.be/CbauUchePao
  
  it is based on "ATTINY85_RC_Receiver.c" (https://github.com/chiefenne/ATTINY85-RC-Receiver-Decoder/blob/master/main_low_resolution.c) but modified to use a different timer in the interrupt because I found that the one in the original seems to conflict with use of the standard "delay()".  (- but I could be wrong!.)
  
