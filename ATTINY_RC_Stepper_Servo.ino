@@ -378,7 +378,7 @@ void IOTEST(){ // measure the RC sevo signal
   int Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
-         if ((count>=124)&&(count<=254)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 124 to 256 for 1ms to 2ms
+         if ((count>=100)&&(count<=254)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 124 to 256 for 1ms to 2ms
              if (Analog_mode){     
                    demand= int(count-124); //Nominal servo range is approx 1ms to 2ms  (My digital tester allows  0.8ms to 2.2ms)
                    PositionAchieved=false; }
