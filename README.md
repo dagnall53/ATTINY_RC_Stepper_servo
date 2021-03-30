@@ -22,16 +22,16 @@ NOTE: the "clone" Digistump boards differ from the real digstump boards in the u
 
 The code uses PB5 (RST) as an analog pin on startup. Connecting an optional 100k to ground should be detected, and this allows simple switching between Pseudo Analog "proportional servo" operation, and "end to end" operation. - But of course this can be altered simply by modifying the code.
 
-End to end operation will move the drive to its endstop when the PWM input exceeds a threshold, and return to the other endstop when the input reduces below the threshold. (including some built in hystresis).
+End to end operation will move the drive to its end-stop when the PWM input exceeds a threshold, and return to the other end-stop when the input reduces below the threshold. (including some built in hystresis).
 
-The saved paramaters ushould give give full movement on the micro linear 4 wire geared stepper motor drives.
+The saved parameters should give give full movement on the micro linear 4 wire geared stepper motor drives.
   
 It is very important that the drive have at least a zero position mechanical end stop fitted, as the setup code spins the motor in reverse during setup expecting to be physically stopped by the endstop. This sets position (0). All movements are then relative from the last position, 
 
-The Attiny 85 internal oscillator is not knwon for its accuracy, and some codes require it to be individually calibrated. This may be necessary if it is important that say 1ms input pulse is exactly "90 degrees" on the servo. I have added some (commented out) test code that can be enabled to send out a test tones. This can be used to adjust OSCCAL.. Just comment the code again before using the unit properly.
+The Attiny 85 internal oscillator is not known for its accuracy, and some codes require it to be individually calibrated. This may be necessary if it is important that say 1ms input pulse is exactly "90 degrees" on the servo. I have added some (commented out) test code that can be enabled to send out a test tones. This can be used to adjust OSCCAL.. Just comment the code again before using the unit properly.
 
-HOWEVER: when used as an "end to end" drive, switching at a "threshold" Pwm input, the actual "threshold" PWM setting is less important, and I would recommend using this mode for most miniature drive applications if possible.
+HOWEVER: when used as an "end to end" drive, switching at a "threshold" PWM input, the actual "threshold" PWM setting is less important, and I would recommend using this mode for most miniature drive applications if possible.
 
-I have designed a small PCB to make this easy to use. This can be obtained from PCB way or other suppliers such as JLPCB. 
- 
-Adjusted folder organization
+I have designed a small PCB to make this easy to use. This can be obtained from or PCBWAY JLPCB. 
+But- as of end March 2021, I have only tested with an initial prototype board as seen in the video and pictures. 
+

@@ -37,12 +37,12 @@ bool PositionAchieved,Analog_mode;
 //---------are we going to simulate an Analog servo, or a "End to end" device that switches at about PWM ==90 degrees? 
 
 //#define ANALOG  //de comment for analog else unit drives end to end and uses approximatley mid point pwm as threshold (with hystresis)  
-// #define V1_board // correct errors on V1 board layou only!
+//#define _V1Board // correct errors on V1 board layou only!
 
 #define REVERSE
 
-#define FullRange 1500  // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
-#define StepSpeed 500   //uS per step 300 is about max speed at half step //  perhaps slower needed for full step? 
+#define FullRange 1600  // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
+#define StepSpeed 400   //uS per step 300 is about max speed at half step //  perhaps slower needed for full step? 
 #define HALF_STEP true  //Full stepping (Halfstep false) at 350us gives about 8 oz thrust, BUT this is close to the dynamic max holding thrust;
                          // HAlf stepping gives slightly higher thrust and higher current drain..
                          // About 10 Oz seen, STATIC holding thrust is about 12-16 oz, 
@@ -79,33 +79,20 @@ void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
 
 //PORTS define 
 
-#ifdef V1_board
-    #define RC_RECEIVER_PORT PB2
-    // drive to motor drive ic
-    //correct pinouts depending on board version.. this is the v1 pcbway board
-    #define OUTA PB1
-    #define OUT_An PB0
-    #ifdef REVERSE
-       #define OUTB PB4
-       #define OUT_Bn PB3
-    #else
-       #define OUTB PB3
-       #define OUT_Bn PB4
-    #endif
-#else
-#define RC_RECEIVER_PORT PB0
-// drive to motor drive ic
-//pinout for jlpcb board and V2 PCBWAY board
-#define OUTA PB1
-#define OUT_An PB2
-#ifdef REVERSE
-   #define OUTB PB4
-   #define OUT_Bn PB3
-#else
-   #define OUTB PB3
-   #define OUT_Bn PB4
-#endif
-#endif
+
+  #define RC_RECEIVER_PORT PB0
+  // drive to motor drive ic
+  //pinout for jlpcb board and V2  board
+  #define OUTA PB1  // led is pb1
+  #define OUT_An PB2    
+  #ifdef REVERSE
+     #define OUTB PB4
+     #define OUT_Bn PB3
+  #else
+     #define OUTB PB3
+     #define OUT_Bn PB4
+  #endif
+
 
 #define RISING_EDGE PINB & (1 << RC_RECEIVER_PORT)
 
