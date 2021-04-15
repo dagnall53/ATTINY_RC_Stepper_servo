@@ -6,6 +6,12 @@
     * Created: 01.01.2019 20:06:29
     * Author : Andreas
     * Description: Read and interpret signals from RC Receivers
+    * Board:     ATtiny25/45/85
+    * Processor: Attiny85
+    * Clock    : Internal 8MHZ
+    * /////////////////////////////////
+    * /// BURN BOOTLOADER FIRST!!! to set frequency ?////
+    * /////////////////////////////////
    */ 
  
  
@@ -103,6 +109,9 @@ void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
 
 
 void Init_PORT(void) {
+  
+  //?PORTB = (1<<PB0);
+
     // this function initializes the pins which are used as output / inputs
     DDRB |= (1 << OUTA);                 // set led port as output
     DDRB |= (1 << OUT_An);  
@@ -344,9 +353,9 @@ void IOTEST(){ // measure the RC sevo signal
   int Hystresis;
   if ( pulse_ready) {
          pulse_ready = 0;
-         if ((count>=100)&&(count<=254)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 124 to 256 for 1ms to 2ms
+         if ((count>=100)&&(count<=250)){  //  this bit could do with adjustment to accomodate the deliberate osccal changes? 124 to 256 for 1ms to 2ms
              if (Analog_mode){     
-                   demand= int(count-124); //Nominal servo range is approx 1ms to 2ms  (My digital tester allows  0.8ms to 2.2ms)
+                   demand= int(count-100); //Nominal servo range is approx 1ms to 2ms  (My digital tester allows  0.8ms to 2.2ms)
                    PositionAchieved=false; }
              else {  // end to end switched mode...add hystresis to avoid hunting Range Stepper_Position= 0 or Fullrange;?
                    Hystresis = 0; demand=0;
