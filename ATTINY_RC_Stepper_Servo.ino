@@ -16,8 +16,13 @@
  
  
  // see Info.h for other info on project etc.. 
+ /*
+  * program with "USBTinyISP
+  */
 
 
+
+//#define  servo // define use as servo , else uses input pin as simple boolean left/right
 
 // includes
 #include <avr/io.h>
@@ -34,6 +39,8 @@ int  Stepper_Position,oldpos;
 int  demand;
 int Timer1;
 bool PositionAchieved,Analog_mode;
+bool LastInput;
+int Counter;
 
 //With an unknown board / motor the following cal routines can be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
 
@@ -47,18 +54,28 @@ bool PositionAchieved,Analog_mode;
 
 #define REVERSE
 
-#define FullRange 1600  // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
+
+#ifdef servo
+#define FullRange  1600 // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
+#define GAIN 15
+                      // GAIN is set to give full range for "0-100" (nominal 0-1ms)range (== 1.0 to 2.ms nominal response from the RC pulse as measured by the interrupt timer.
+                      // so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440, say 1500?
+                      // so gain should be 1500/100 = (integer!) 15 
+
+#else
+//now settings for switch mode 
+#define FullRange  1000  // 1000 is 360 degrees for the Ultra-Tiny Micro Mini 6mm Planetary Gearbox 2-phase 4-wire Gear Stepper Motor 5V
+#define GAIN 1
+#endif
+
 #define StepSpeed 400   //uS per step 300 is about max speed at half step //  perhaps slower needed for full step? 
-#define HALF_STEP true  //Full stepping (Halfstep false) at 350us gives about 8 oz thrust, BUT this is close to the dynamic max holding thrust;
+
+#define HALF_STEP false  //Full stepping (Halfstep false) at 350us gives about 8 oz thrust, BUT this is close to the dynamic max holding thrust;
                          // HAlf stepping gives slightly higher thrust and higher current drain..
                          // About 10 Oz seen, STATIC holding thrust is about 12-16 oz, 
                          // but once motor gets to max thrust, any "slip" can slip it back to about 8/9 oz before it holds again. 
                          
 
-#define GAIN 15
-                      // GAIN is set to give full range for "0-100" (nominal 0-1ms)range (== 1.0 to 2.ms nominal response from the RC pulse as measured by the interrupt timer.
-                      // so if the Range measurement is 36 counts (of 40 steps), the full range steps are 1440, say 1500?
-                      // so gain should be 1500/100 = (integer!) 15 
 
 
 void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
@@ -109,6 +126,13 @@ void Calibrate_OSCILLATOR(void){// OSCCAL needs to be calibrated per chip
 
 
 void Init_PORT(void) {
+  /*
+ * Set 1 using DDRB |= (1 << PB3);
+ * set 0 using PORTB &= ~(1 << PB3);
+ * 
+ * 
+ * 
+ */
   
   //?PORTB = (1<<PB0);
 
@@ -146,12 +170,15 @@ void Init_INTERRUPTS(){
      sei();                                   // enable interrupts (MANDATORY)
 }
 
+
+ #ifdef servo
  #ifdef Send_10K_CAL   // for the calibration oscillator set a timer interrupt. 
         ISR (TIMER0_COMPA_vect) {
          PORTB ^= 1 << PINB3;        // Invert pin PB3
         }
  #endif 
- 
+
+
 ISR(PCINT0_vect){   // I have retained the original code and comments from Andreas's code.
          // interrupt service routine for pin change interrupt to measure the RC servo pulse 
          // modified to use TCNT0 to allow delay to work.. 
@@ -175,7 +202,7 @@ ISR(PCINT0_vect){   // I have retained the original code and comments from Andre
       GIMSK &= ~(1 << PCIE);                   // Pin Change Interrupt Disable (datasheet page 51)
       pulse_ready=1;
 }
-
+#endif
 
 
 void Stepper_Drive(int  in) {    // simple way to select 4 pin or 5 pin steppers etc. 
@@ -424,24 +451,62 @@ void setup(){
   if ((analogRead(0)) <= 900 ) {  Analog_mode= true;}  // 10 bit test using RST /..  if nothing connected, reset pin is near Vcc else is lower..    
    Calibrate_OSCILLATOR();
    Init_PORT();
+   
+#ifdef servo 
    Init_INTERRUPTS();
+   
      if (Analog_mode){
         Step_set_Zero(4); // 4 flashes tells you its analog mode
         } 
         else{Step_set_Zero(1);
         }
+  #endif      
    //calibration runs ?
    #ifdef Count_range_steps
          Count_Motor_Range();
    #endif
     
   #endif
+  LastInput= digitalRead(RC_RECEIVER_PORT);
+  
+  if   (digitalRead(RC_RECEIVER_PORT)){ if (HALF_STEP){Stepper_Position=(FullRange*2/GAIN); }else {Stepper_Position=(FullRange/GAIN);}}
+               else {Stepper_Position=0;}
+  Counter=0;
+  Achieved();
  }
 
     
 void loop(){
-
+//Servo loop
+#ifdef servo 
   if (!PositionAchieved) {  Move_To(demand);    }
           IOTEST();
+#else
+// end servo loop 
+
+// if   (digitalRead (RC_RECEIVER_PORT) ==true){Move_To(100);
+// delay (10);
+// Move_To(0);
+// delay(10);
+// }
+// else{Move_To(5);
+// delay (2000);Move_To(0);
+// delay(2000);
+// 
+//  }
+ bool State=digitalRead(RC_RECEIVER_PORT);
+ 
+  if (State == LastInput){Counter=0;}
+  Counter++;
+  if (Counter >= 10){  // state changeed!
+          LastInput=State;
+          if   (State==true){ Move_To(FullRange/GAIN); }
+               else {Move_To(0);}
+  }
+  delay(1);
+ 
+
+#endif
+
       
   }
