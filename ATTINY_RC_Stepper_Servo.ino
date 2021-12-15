@@ -53,8 +53,8 @@ int Counter;
 //#define _V1Board // correct errors on V1 board layou only!
 
 #define REVERSE
-
-
+#define BackOff // to reverese about 30 degrees for the American style knuckler 
+float backangle = 0.1;  // portion of full scale
 #ifdef servo
 #define FullRange  1600 // ~1500 for exact full range movement on the linear servo and also defines travel for non analog  NOTE: larger value keeps motor driving until it hits endstops
 #define GAIN 15
@@ -73,7 +73,7 @@ int Counter;
 
 #else
 //now settings for switch mode 
-#define FullRange  800  // 1000 is 360 degrees for the Ultra-Tiny Micro Mini 6mm Planetary Gearbox 2-phase 4-wire Gear Stepper Motor 5V
+#define FullRange  1000  // 1000 is 360 degrees for the Ultra-Tiny Micro Mini 6mm Planetary Gearbox 2-phase 4-wire Gear Stepper Motor 5V
 #define GAIN 1
 #define StepSpeed 400   //uS per step 300 is about max speed at full step for 6mm motor  //  600 at half step?
                         // takes about 200Ma max with the motor noted above 5V
@@ -506,13 +506,24 @@ void loop(){
   Counter++;
   if (Counter >= 100){  // state changeed!   count is debounce !
           LastInput=State;
-          if   (State==true){ Move_To(FullRange/GAIN); }
-               else {Move_To(0);}
+          
+          if   (State==true){ 
+              Move_To(FullRange/GAIN); 
+                               #ifdef BackOff  
+                               Move_To((1-backangle)*(FullRange/GAIN)); // about 30 degrees backing off
+                               #endif
+            }else {Move_To(0);
+                               #ifdef BackOff  
+                               Move_To(backangle*(FullRange/GAIN)); // about 30 degrees backing off
+                               #endif
+                               }
+          
+             
+               
   }
   delay(1);
  
 
 #endif
-
+}
       
-  }
