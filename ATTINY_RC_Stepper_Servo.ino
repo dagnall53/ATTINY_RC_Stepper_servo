@@ -40,6 +40,8 @@ bool PositionAchieved,Analog_mode;
 bool LastInput;
 int Counter;
 
+// ************Select Functionality with defines.. ***************************
+
 //With an unknown board / motor the following cal routines can be set initially to help set the ATTiny clock and to discover the range of movement for the servo mechanism in steps 
 
 // #define Send_10K_CAL
@@ -53,6 +55,10 @@ int Counter;
 
 #define REVERSE
 #define BackOff // to reverese about 30 degrees for the American style knuckler 
+
+
+
+//****************  End of defines **********************************************
 float backangle = 0.1;  // portion of full scale
 
 #ifdef servo
@@ -502,30 +508,21 @@ void loop(){
 #else
 // end servo loop 
 
-// if   (digitalRead (RC_RECEIVER_PORT) ==true){Move_To(100);
-// delay (10);
-// Move_To(0);
-// delay(10);
-// }
-// else{Move_To(5);
-// delay (2000);Move_To(0);
-// delay(2000);
-// 
-//  }
+//**    Some code to work "binary" (NON -SERVO) movements : between fullrange/gain and 0 positions with "backoff" movements ****
  bool State=digitalRead(RC_RECEIVER_PORT);
  
   if (State == LastInput){Counter=0;}
   Counter++;
   if (Counter >= 100){  // state changeed!   count is debounce !
-          LastInput=State;
-          
-          if   (State==true){ 
+      LastInput=State;
+      if   (State==true){ 
               Move_To(FullRange/GAIN); 
                                #ifdef BackOff  
                                Move_To((1-backangle)*(FullRange/GAIN)); // about 30 degrees backing off
                                #endif
-            }else {
-             Move_To(0);
+            } 
+            else {
+                  Move_To(0);
                                #ifdef BackOff  
                                Move_To(backangle*(FullRange/GAIN)); // about 30 degrees backing off
                                #endif
